@@ -6,7 +6,7 @@
     },
     {
         "name": "get_schema",
-        "description": "Entities, fields, relations and legends (with the entities inside each) of a diagram, or of one context view. No coordinates. Absent keys mean default: not null, not unique, plain field. Per entity, when present: uniques (multi-column), checks and indexes, each with its name. An index on an expression, partial, or with NULLS NOT DISTINCT carries its key list as SQL in expr, its condition in where, and nullsNotDistinct; its columns are then only the plain ones among its keys. Also the user's house style for new tables: namingConvention (snake_case, camelCase or UPPER_SNAKE_CASE) for every new table and column name, and activeTemplate, the fields every new entity starts with. Copy activeTemplate.fields into create_entity as they are, then add your own; null means no template.",
+        "description": "Entities, fields, relations and legends (with their entities) of a diagram, or of one context view. No coordinates. Absent keys mean default: not null, not unique, plain field. Per entity, when present: uniques (multi-column), checks and indexes, each with its name. An index on an expression, partial, or with NULLS NOT DISTINCT carries its key list as SQL in expr, its condition in where, and nullsNotDistinct; its columns are then only the plain ones among its keys. setNullColumns: what SET NULL (col) clears. Also the user's house style for new tables: namingConvention (snake_case, camelCase or UPPER_SNAKE_CASE) for new tables and columns, and activeTemplate, the fields every new entity starts with. Copy activeTemplate.fields into create_entity as they are, then add your own; null means none.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -117,7 +117,7 @@
     },
     {
         "name": "propose_changes",
-        "description": "Edit the active main diagram: schema, legends, context views. Edits land as unsaved changes the user reviews in History, then saves or undoes; nothing is written to the database. All or nothing. Deleting an entity, field, relation, legend or context view asks the user first and may take minutes, except what an agent created since the last save and the user has not edited, which is deleted without asking. Result {status: applied|declined|failed, results: [{action, ok, error?}]}; an error says what to do instead. Change in place, never delete and recreate: update_entity, update_field, update_relation. Tables: create_entity (name, fields), delete_entity (name). Columns: create_field (entity, fields), update_field (entity, field, patch), delete_field (entity, field), which also drops the relation the column carries. Relations: create_relation (from: the referenced parent, to: gets the FK column, which comes from here and never from create_field), update_relation (from, to, patch), delete_relation (from, to). Rules: create_check_constraint (entity, field, values) for allowed values, or (entity, expr); create_unique_constraint (entity, columns) for columns unique together; create_index (entity, columns); delete_constraint, delete_index (entity, constraint). To change a rule, delete and create it in one call. Legends: update_legend, delete_legend (name); group_entities makes and fills them. Context views: create_context_view (name, entities), update_context_view (name, patch), delete_context_view (name).",
+        "description": "Edit the active main diagram: schema, legends, context views. Edits land as unsaved changes the user reviews in History, then saves or undoes; nothing is written to the database. All or nothing. Deleting an entity, field, relation, legend or context view asks the user first and may take minutes, except what an agent created since the last save and the user has not edited, which is deleted without asking. An error says what to do instead. Change in place, never delete and recreate: update_entity, update_field, update_relation. Tables: create_entity (name, fields), delete_entity (name). Columns: create_field (entity, fields), update_field (entity, field, patch), delete_field (entity, field), which also drops the relation the column carries. Relations: create_relation (from: the referenced parent, to: gets the FK column, added, or taken over when `to` has a plain or composite-key column of that name), update_relation (from, to, patch), delete_relation (from, to). Rules: create_check_constraint (entity, field, values) for allowed values, or (entity, expr); create_unique_constraint (entity, columns) for columns unique together; create_index (entity, columns); delete_constraint, delete_index (entity, constraint). To change a rule, delete and create it in one call. Legends: update_legend, delete_legend (name); group_entities makes and fills them. Context views: create_context_view (name, entities), update_context_view (name, patch), delete_context_view (name).",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -142,18 +142,20 @@
                                     "type": "object",
                                     "properties": {
                                         "name": { "type": "string" },
-                                        "type": { "type": "string", "description": "SQL type, e.g. VARCHAR(255) or BIGINT UNSIGNED (MySQL)" },
+                                        "type": { "type": "string", "description": "SQL type, e.g. VARCHAR(255)" },
                                         "nullable": { "type": "boolean", "description": "Absent means not null, as get_schema reads" },
                                         "unique": { "type": "boolean" },
                                         "primaryKey": { "type": "boolean", "description": "Several make a composite key. With none, a field named id is the key" },
                                         "defaultValue": { "type": "string" },
                                         "description": { "type": "string" },
-                                        "enumValues": { "type": "array", "items": { "type": "string" } }
+                                        "enumValues": { "type": "array", "items": { "type": "string" } },
+                                        "generated": { "type": "object", "description": "{expr, stored}" },
+                                        "invisible": { "type": "boolean" }
                                     },
                                     "required": ["name", "type"]
                                 }
                             },
-                            "patch": { "type": "object", "description": "update_entity: {name?, description?, color? (hex), char?, coll?, renameField?: {from, to}}; update_field: {type?, nullable?, unique?, primaryKey?, defaultValue?, description?}, defaultValue a SQL literal ('' for an empty string) or null to remove it; update_relation: {onDelete?, onUpdate? (null for none), description?, cardinality?}; update_legend: {name?, color? (hex), description?}; update_context_view: {name?, description?, color?, addEntities?: [], removeEntities?: []}. An unknown key is refused, never ignored" },
+                            "patch": { "type": "object", "description": "update_entity: {name?, description?, color? (hex), char?, coll?, renameField?: {from, to}}; update_field: {type?, nullable?, unique?, primaryKey?, defaultValue?, description?, enumValues?, generated?, invisible?}, defaultValue a SQL literal ('' for empty) or null to remove; update_relation: {onDelete?, onUpdate? (null for none), description?, cardinality?}; update_legend: {name?, color? (hex), description?}; update_context_view: {name?, description?, color?, addEntities?: [], removeEntities?: []}. An unknown key is refused, never ignored" },
                             "from": { "type": "string" },
                             "to": { "type": "string" },
                             "relType": { "type": "string", "enum": ["1:N", "1:1"] },
@@ -165,11 +167,14 @@
                             "field": { "type": "string", "description": "update_field, delete_field, create_check_constraint: the existing column" },
                             "values": { "type": "array", "items": { "type": "string" }, "description": "create_check_constraint: allowed values, written as field IN (...)" },
                             "expr": { "type": "string", "description": "create_check_constraint: a SQL condition, instead of field + values" },
-                            "columns": { "type": "array", "items": { "type": "string" }, "description": "create_unique_constraint: columns unique together (two or more); create_index: indexed columns, in order; virtual create_relation: the child's existing columns" },
+                            "columns": { "type": "array", "items": { "type": "string" }, "description": "create_unique_constraint: 2+ columns unique together; create_index: indexed columns, in order; virtual create_relation: the child's existing columns" },
                             "parentColumns": { "type": "array", "items": { "type": "string" }, "description": "virtual create_relation: the parent's columns, its primary key when absent" },
                             "constraint": { "type": "string", "description": "delete_constraint, delete_index: its name from get_schema" },
-                            "unique": { "type": "boolean", "description": "create_index: a unique index. For a plain uniqueness rule use create_unique_constraint" },
-                            "indexType": { "type": "string", "description": "create_index: e.g. BTREE, the dialect default when absent" }
+                            "unique": { "type": "boolean", "description": "create_index: unique (plain rule: create_unique_constraint)" },
+                            "indexType": { "type": "string", "description": "create_index: e.g. BTREE, the dialect default when absent" },
+                            "opclass": { "type": "string", "description": "HNSW/IVFFLAT: operator class, required" },
+                            "where": { "type": "string", "description": "create_index: partial index WHERE" },
+                            "indexOptions": { "type": "string", "description": "HNSW/IVFFLAT: WITH (...) parameters, e.g. m=16, ef_construction=64" }
                         },
                         "required": ["type"]
                     }
@@ -195,7 +200,7 @@
     },
     {
         "name": "group_entities",
-        "description": "Group entities of the active main diagram into legends. Decide groups from the source code when you have it, else from the user's description, else from table names. Schemity sizes each legend and places it beside the groups it shares relations with (the most connected first, whatever order you list them in), arranges the entities inside and routes relations; entities not listed stay put. You get no coordinates: to say where new legends go, pass beside. An existing legend keeps its spot unless relayout is true. A legend whose every entity this call regroups is removed when an agent made it since the save (removedLegends); otherwise it stays, empty, listed in emptiedLegends for delete_legend. The same input gives the same layout; status unchanged means nothing moved. One undo step, none when unchanged. Check the lines with check_relation_lines.",
+        "description": "Group entities of the active main diagram into legends. Decide groups from the source code when you have it, else from the user's description, else from table names. Schemity sizes each legend and places it beside the groups it shares relations with (the most connected first, whatever order you list them in), arranges the entities inside and routes relations; entities not listed stay put. The picture ends at the canvas's top-left. You get no coordinates: to say where new legends go, pass beside. An existing legend keeps its spot unless relayout is true. A legend whose every entity this call regroups is removed when an agent made it since the save (removedLegends); otherwise it stays, empty, listed in emptiedLegends for delete_legend. The same input gives the same layout; status unchanged means nothing moved. One undo step, none when unchanged. Check the lines with check_relation_lines.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -227,6 +232,24 @@
                 }
             },
             "required": ["diagram", "groups"],
+            "additionalProperties": false
+        }
+    },
+    {
+        "name": "arrange_entities",
+        "description": "Place entities of the active main diagram in rows, left to right and top to bottom, columns lined up: for a few tables that should sit a certain way round (group_entities is for domains). Schemity spaces them from the corner they occupied and routes relations; no coordinates. Entities not listed stay put, and covered names those a placed table now overlaps: list them too. One undo step, none when status is unchanged.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "diagram": { "type": "string", "description": "Id from list_diagrams" },
+                "rows": {
+                    "type": "array",
+                    "minItems": 1,
+                    "description": "Rows of entity names, e.g. [[\"users\", \"orders\"], [\"items\"]]",
+                    "items": { "type": "array", "minItems": 1, "items": { "type": "string" } }
+                }
+            },
+            "required": ["diagram", "rows"],
             "additionalProperties": false
         }
     },

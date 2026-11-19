@@ -1,0 +1,22 @@
+{
+    "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+    "name": "com.schemity/mcp",
+    "title": "Schemity",
+    "description": "Local database MCP server: the agent reads your schema and stages edits, never holding credentials.",
+    "repository": {
+        "url": "https://github.com/schemity/mcp",
+        "source": "github"
+    },
+    "websiteUrl": "https://schemity.com/database-mcp-server/",
+    "version": "1.0.0",
+    "packages": [
+        {
+            "registryType": "npm",
+            "identifier": "schemity-mcp",
+            "version": "1.0.0",
+            "transport": {
+                "type": "stdio"
+            }
+        }
+    ]
+}

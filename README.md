@@ -1,8 +1,8 @@
 # Schemity MCP Server
 
-A local database MCP server built into [Schemity](https://schemity.com), database design software for software engineers. Your AI agent reads the schema of your live PostgreSQL, MySQL, MariaDB, SQL Server, SQLite, or Snowflake database, sees what a migration would do before it runs, and stages diagram edits you review. The agent never gets database credentials, and nothing it does writes to a database.
+A local database MCP server built into [Schemity](https://schemity.com), database design software for software engineers. Your AI agent reads the schema of your live PostgreSQL, CockroachDB, MySQL, MariaDB, SQL Server, SQLite, Cloudflare D1, or Snowflake database, sees what a migration would do before it runs, and stages diagram edits you review. The agent never gets database credentials, and nothing it does writes to a database.
 
-> The server ships inside the Schemity desktop app, which is closed source. This repository holds its documentation, the tool list it exposes ([`tools.json`](tools.json)), and ready-to-paste host configs ([`examples/`](examples)). Bug reports and feature requests go to [schemity-feedback](https://github.com/tbson/schemity-feedback/issues).
+> The server ships inside the Schemity desktop app, which is closed source. This repository holds its documentation, the tool list it exposes ([`tools.json`](tools.json)), ready-to-paste host configs ([`examples/`](examples)), and the source of [`schemity-mcp`](launcher.js), a small npm launcher that finds the installed app and starts its server. Bug reports and feature requests go to [schemity-feedback](https://github.com/tbson/schemity-feedback/issues).
 
 ## Why a governed path
 
@@ -15,7 +15,7 @@ Most database MCP servers hand the agent a connection string and run whatever SQ
 
 ## Tools
 
-18 tools, as of Schemity 2.13.2. None of them runs SQL the agent writes, and none returns a row. Full input schemas are in [`tools.json`](tools.json).
+19 tools and 3 prompts, as of Schemity 2.14.9. None of them runs SQL the agent writes, and none returns a row. Full input schemas are in [`tools.json`](tools.json).
 
 ### `list_diagrams`
 
@@ -81,6 +81,10 @@ Create, change, and delete tables, columns, relations, constraints, indexes, leg
 
 Group tables into legends by domain, from your source code or your description. Staged as unsaved edits you review.
 
+### `arrange_entities`
+
+Place a few tables in rows and columns, the way round you ask for. Staged as unsaved edits you review.
+
 ### `route_relations`
 
 Route relation lines around the tables so they cross less. Staged as unsaved edits you review.
@@ -88,6 +92,14 @@ Route relation lines around the tables so they cross less. Staged as unsaved edi
 ### `check_relation_lines`
 
 Relation lines that overlap or cross, and how many bends they take. Read-only.
+
+## Prompts
+
+Three step-by-step requests that call the right tools in the right order. Claude Code lists them as `/mcp__schemity__<name>` slash commands; other hosts show them wherever they list a server's prompts.
+
+- **`organize_by_domain`** - group a diagram's tables into domains learned from the codebase, route the lines, make a context view per domain, and report the dependencies and cycles between domains.
+- **`review_migration`** - check a migration against the live database of a connected diagram: data loss, statements that can fail on existing rows, rewrites, dependent views, triggers and functions. Nothing is run.
+- **`design_feature`** - design the tables, columns, relations and constraints a feature needs as unsaved changes on a diagram, lint them, and show what the migration would cost. Nothing is saved or run.
 
 ## Example prompts
 
@@ -106,19 +118,42 @@ Ask in plain words. Your agent host gives the model every tool with its descript
 
 ## Databases
 
-PostgreSQL, Supabase, MySQL, MariaDB, SQL Server, and SQLite, directly or through an SSH tunnel, and Snowflake.
+PostgreSQL, Supabase, CockroachDB, MySQL, MariaDB, SQL Server, and SQLite, directly or through an SSH tunnel, plus Cloudflare D1 and Snowflake.
 
 ## Setup
 
 1. [Install Schemity](https://schemity.com/#pricing) on macOS, Windows, or Linux.
 2. Open the diagram you want the agent to see, or let the agent find and open a saved one with `find_diagrams` and `open_diagram`.
-3. Open the **MCP** panel from the plug icon in the control bar, or with `Cmd+Shift+A` (macOS) / `Ctrl+Shift+A` (Windows, Linux). It shows the server status, a connection test, and a snippet for each host with the right path for your platform.
+3. Open the **MCP** panel from the plug icon in the control bar, or with `Cmd+Shift+A` (macOS) / `Ctrl+Shift+A` (Windows, Linux). It lists Claude Code, Claude Desktop, Cursor, Codex and OpenCode with an **Add** button each. Add writes the entry into that app's own settings file; restart the app afterwards. No port and no token are needed.
 
-The examples below use the macOS path. On Windows and Linux, copy the snippet from the MCP panel instead.
+To set a host up by hand instead, use one of the two forms below.
 
-### stdio: Claude Code, Claude Desktop, Codex, OpenCode
+### With npx: any stdio host
 
-The host starts the Schemity binary with `--mcp`, so it can also launch Schemity when the app is closed.
+[`schemity-mcp`](https://www.npmjs.com/package/schemity-mcp) finds the installed app on macOS, Windows, or Linux and starts its server, so the same entry works on every platform:
+
+```json
+{
+  "mcpServers": {
+    "schemity": {
+      "command": "npx",
+      "args": ["-y", "schemity-mcp"]
+    }
+  }
+}
+```
+
+**Claude Code**
+
+```bash
+claude mcp add --scope user schemity -- npx -y schemity-mcp
+```
+
+If Schemity is installed somewhere else (an AppImage, a custom folder), set the `SCHEMITY_BIN` environment variable to the path of the `schemity` binary.
+
+### With the binary path: Claude Code, Claude Desktop, Cursor, Codex, OpenCode
+
+The host starts the Schemity binary with `--mcp`, so it can also launch Schemity when the app is closed. This is what the Add button writes. The examples use the macOS path; on Windows and Linux, copy the snippet from the MCP panel.
 
 **Claude Code**
 
@@ -126,7 +161,7 @@ The host starts the Schemity binary with `--mcp`, so it can also launch Schemity
 claude mcp add --scope user schemity -- "/Applications/Schemity.app/Contents/MacOS/schemity" --mcp
 ```
 
-**Claude Desktop** - `claude_desktop_config.json`, then restart Claude Desktop
+**Claude Desktop** (`claude_desktop_config.json`) and **Cursor** (`~/.cursor/mcp.json`), then restart the app
 
 ```json
 {
@@ -160,11 +195,9 @@ args = ["--mcp"]
 }
 ```
 
-### Streamable HTTP: Cursor and other HTTP clients
+### Streamable HTTP: any other client
 
 Keep Schemity open; an HTTP host cannot start it. The port defaults to 7332 and can be changed in the panel.
-
-**Cursor** - `~/.cursor/mcp.json`
 
 ```json
 {
@@ -179,17 +212,23 @@ Keep Schemity open; an HTTP host cannot start it. The port defaults to 7332 and 
 
 ## Troubleshooting
 
-- **"Schemity is not running"** - only a stdio host can start the app. On an HTTP host such as Cursor, open Schemity yourself and retry.
+- **"Schemity is not running"** - only a stdio host can start the app. On an HTTP host, open Schemity yourself and retry.
 - **401 Unauthorized** - the token was regenerated in the panel; copy the current one into the host's config.
 - **Port in use** - pick another port in the panel and click Restart.
+- **"Schemity is not installed where schemity-mcp looks for it"** - install the desktop app, or set `SCHEMITY_BIN` to the path of the `schemity` binary.
+- **A tool says a feature is not available on the expired trial** - the server itself stays free, and the agent can do what you can still do in the app: read the schema and edit tables, relations and legends. Lint, impact analysis, the change preview, row counts, the data dictionary and context views need a license, for an agent as for a person.
 - **A tool says a diagram is "not open"** - ask the agent to open it with `open_diagram`, or open it in the Schemity window yourself.
 
 ## Requirements and pricing
 
-The MCP server is a desktop feature. It runs during the 2-week free trial (every feature unlocked, no credit card) and with a license, a one-time purchase of $129. It is not part of Schemity Lite, the free browser version.
+The MCP server is a desktop feature. During the 2-week free trial (no credit card) and with a license, a one-time purchase of $129, every tool works. After the trial the server keeps running for free with the tools that match what the app still lets you do by hand: reading the schema and editing tables, relations and legends. It is not part of Schemity Lite, the free browser version.
 
 ## Links
 
 - Documentation: [AI Agents via MCP](https://schemity.com/doc/ai-assisted-design/)
 - Impact analysis: [what a migration costs before it runs](https://schemity.com/doc/impact-analysis/)
 - Website: [schemity.com](https://schemity.com)
+
+## License
+
+The launcher, the documentation and the example configs in this repository are MIT licensed ([LICENSE](LICENSE)). The Schemity desktop app, which contains the MCP server, is closed source.

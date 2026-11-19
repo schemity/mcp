@@ -1,0 +1,39 @@
+{
+    "name": "schemity-mcp",
+    "version": "1.0.0",
+    "description": "Starts the local database MCP server built into the Schemity desktop app. The agent reads your schema and stages edits you review; it never gets database credentials.",
+    "mcpName": "com.schemity/mcp",
+    "bin": {
+        "schemity-mcp": "launcher.js"
+    },
+    "files": [
+        "launcher.js",
+        "LICENSE"
+    ],
+    "scripts": {
+        "test": "node --test"
+    },
+    "engines": {
+        "node": ">=18"
+    },
+    "keywords": [
+        "mcp",
+        "mcp-server",
+        "database",
+        "schema",
+        "erd",
+        "postgresql",
+        "mysql",
+        "sql-server",
+        "sqlite",
+        "snowflake",
+        "migration"
+    ],
+    "homepage": "https://schemity.com/database-mcp-server/",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/schemity/mcp.git"
+    },
+    "bugs": "https://github.com/tbson/schemity-feedback/issues",
+    "license": "MIT"
+}

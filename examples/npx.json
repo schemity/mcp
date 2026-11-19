@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "schemity": {
+      "command": "npx",
+      "args": ["-y", "schemity-mcp"]
+    }
+  }
+}
